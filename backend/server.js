@@ -7,36 +7,63 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 
-// Home Route
+// ==========================================
+// HOME ROUTE
+// ==========================================
 app.get("/", (req, res) => {
-  res.send("🚍 MOBISCOPE Backend Running...");
+    res.send("🚍 MOBISCOPE Backend Running...");
 });
 
-// Database Test Route
+// ==========================================
+// GET ALL STUDENTS
+// ==========================================
 app.get("/students", async (req, res) => {
-  try {
-    const result = await pool.query("SELECT * FROM students");
-    res.json(result.rows);
-  } catch (err) {
-    console.error(err);
-    res.status(500).send("Database Error");
-  }
+    try {
+        const result = await pool.query(
+            "SELECT * FROM students"
+        );
+
+        res.json(result.rows);
+
+    } catch (err) {
+        console.error("Students API Error:", err);
+
+        res.status(500).json({
+            success: false,
+            message: "Database Error"
+        });
+    }
 });
 
-// Attendance API
-// Attendance API
+// ==========================================
+// ATTENDANCE API
+// POST /api/attendance
+// ==========================================
 app.post("/api/attendance", async (req, res) => {
 
     try {
 
         const { rfid_uid, bus_id } = req.body;
 
+        // Check required fields
+        if (!rfid_uid || !bus_id) {
+            return res.status(400).json({
+                success: false,
+                message: "rfid_uid and bus_id are required"
+            });
+        }
+
+        // ------------------------------------------
         // Find student using RFID
+        // ------------------------------------------
         const student = await pool.query(
-            "SELECT * FROM students WHERE rfid_uid = $1",
+            `SELECT *
+             FROM students
+             WHERE rfid_uid = $1`,
             [rfid_uid]
         );
 
+        // RFID not found
         if (student.rows.length === 0) {
             return res.status(404).json({
                 success: false,
@@ -46,70 +73,108 @@ app.post("/api/attendance", async (req, res) => {
 
         const s = student.rows[0];
 
+        // ------------------------------------------
         // Insert attendance
+        // ------------------------------------------
         await pool.query(
-            `INSERT INTO attendance (student_id, bus_id)
-             VALUES ($1,$2)`,
+            `INSERT INTO attendance
+             (student_id, bus_id)
+             VALUES ($1, $2)`,
             [s.student_id, bus_id]
         );
 
-        res.json({
+        // ------------------------------------------
+        // Send attendance response
+        // ------------------------------------------
+        res.status(200).json({
             success: true,
             student_name: s.student_name,
             parent_name: s.parent_name,
             parent_phone: s.parent_phone,
+            url: s.url,
             message: "Attendance marked successfully"
         });
 
     } catch (err) {
-        console.log(err);
+
+        console.error("Attendance API Error:", err);
 
         res.status(500).json({
-            success:false,
-            message:"Server Error"
+            success: false,
+            message: "Server Error"
         });
     }
-
 });
 
-// GPS API
+// ==========================================
+// GPS / BUS LOCATION API
+// POST /api/location
+// ==========================================
 app.post("/api/location", async (req, res) => {
 
     try {
 
-        const { bus_id, latitude, longitude, speed } = req.body;
+        const {
+            bus_id,
+            latitude,
+            longitude,
+            speed
+        } = req.body;
 
+        // Check required fields
+        if (
+            !bus_id ||
+            latitude === undefined ||
+            longitude === undefined ||
+            speed === undefined
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "bus_id, latitude, longitude and speed are required"
+            });
+        }
+
+        // ------------------------------------------
+        // Insert / Update bus location
+        // ------------------------------------------
         await pool.query(
             `INSERT INTO bus_location
-            (bus_id, latitude, longitude, speed)
-            VALUES ($1,$2,$3,$4)
-            ON CONFLICT (bus_id)
-            DO UPDATE SET
+             (bus_id, latitude, longitude, speed)
+             VALUES ($1, $2, $3, $4)
+
+             ON CONFLICT (bus_id)
+             DO UPDATE SET
                 latitude = EXCLUDED.latitude,
                 longitude = EXCLUDED.longitude,
                 speed = EXCLUDED.speed,
                 updated_at = CURRENT_TIMESTAMP`,
-            [bus_id, latitude, longitude, speed]
+            [
+                bus_id,
+                latitude,
+                longitude,
+                speed
+            ]
         );
 
-        res.json({
+        res.status(200).json({
             success: true,
             message: "Location Updated"
         });
 
     } catch (err) {
 
-        console.log(err);
+        console.error("Location API Error:", err);
 
         res.status(500).json({
             success: false,
             message: err.message
         });
-
     }
-
 });
 
-app.listen(PORT, () => {
-  console.log(`Server Running on http://localhost:${PORT}`);
+// ==========================================
+// START SERVER
+// ==========================================
+app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server Running on port ${PORT}`);
 });
