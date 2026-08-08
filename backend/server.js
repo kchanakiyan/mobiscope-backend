@@ -73,13 +73,41 @@ app.post("/api/attendance", async (req, res) => {
 });
 
 // GPS API
-app.post("/api/location", (req, res) => {
-  console.log(req.body);
+app.post("/api/location", async (req, res) => {
 
-  res.json({
-    success: true,
-    message: "Location updated successfully"
-  });
+    try {
+
+        const { bus_id, latitude, longitude, speed } = req.body;
+
+        await pool.query(
+            `INSERT INTO bus_location
+            (bus_id, latitude, longitude, speed)
+            VALUES ($1,$2,$3,$4)
+            ON CONFLICT (bus_id)
+            DO UPDATE SET
+                latitude = EXCLUDED.latitude,
+                longitude = EXCLUDED.longitude,
+                speed = EXCLUDED.speed,
+                updated_at = CURRENT_TIMESTAMP`,
+            [bus_id, latitude, longitude, speed]
+        );
+
+        res.json({
+            success: true,
+            message: "Location Updated"
+        });
+
+    } catch (err) {
+
+        console.log(err);
+
+        res.status(500).json({
+            success: false,
+            message: "Database Error"
+        });
+
+    }
+
 });
 
 app.listen(PORT, () => {
