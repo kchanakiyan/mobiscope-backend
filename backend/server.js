@@ -103,7 +103,7 @@ app.post("/api/location", async (req, res) => {
 
         res.status(500).json({
             success: false,
-            message: "Database Error"
+            message: err.message
         });
 
     }
